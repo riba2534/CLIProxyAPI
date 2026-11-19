@@ -481,7 +481,8 @@ func normalizeCodexParametersDoc(doc *ojson.Doc, paramsPath string, params ojson
 
 func stripIncompatiblePatternsFromJSON(rawStr string) (string, bool) {
 	if !strings.Contains(rawStr, `\p{`) && !strings.Contains(rawStr, `\P{`) && !strings.Contains(rawStr, `\u`) &&
-		!strings.Contains(rawStr, `\\0`) && !strings.Contains(rawStr, "inimum") && !strings.Contains(rawStr, "aximum") {
+		!strings.Contains(rawStr, `\\0`) && !strings.Contains(rawStr, "inimum") && !strings.Contains(rawStr, "aximum") &&
+		!strings.Contains(rawStr, "uniqueItems") {
 		return rawStr, false
 	}
 	var root any
@@ -605,6 +606,12 @@ func stripIncompatiblePatterns(v any) bool {
 				delete(schema, boundKey)
 				changed = true
 			}
+		}
+
+		// Codex rejects uniqueItems with invalid_json_schema when it compiles strict schemas.
+		if _, ok := schema["uniqueItems"]; ok {
+			delete(schema, "uniqueItems")
+			changed = true
 		}
 
 		// Inspect regex keys under patternProperties
