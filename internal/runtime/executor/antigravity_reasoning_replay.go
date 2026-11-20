@@ -292,6 +292,10 @@ func antigravityClaudeReplaySystemLane(payload []byte) string {
 	if errUnmarshal := json.Unmarshal([]byte(system.Raw), &value); errUnmarshal != nil {
 		return ""
 	}
+	value, kept := antigravityClaudeReplaySystemWithoutAttribution(value)
+	if !kept {
+		return ""
+	}
 	value = antigravityClaudeReplayNormalizeSystem(value)
 	normalized, errMarshal := json.Marshal(value)
 	if errMarshal != nil {
@@ -299,6 +303,36 @@ func antigravityClaudeReplaySystemLane(payload []byte) string {
 	}
 	sum := sha256.Sum256(normalized)
 	return fmt.Sprintf("%x", sum[:16])
+}
+
+// antigravityClaudeReplaySystemWithoutAttribution drops the Claude Code
+// attribution block the translators already remove before the upstream sees the
+// prompt. Its cch and cc_prompt_id change on every prompt, so hashing it would
+// move the lane after each turn and a stored signature would never be replayed.
+// The boolean reports whether any other system content survives.
+func antigravityClaudeReplaySystemWithoutAttribution(value any) (any, bool) {
+	switch typed := value.(type) {
+	case string:
+		return value, !util.IsClaudeCodeAttributionSystemText(typed)
+	case []any:
+		kept := make([]any, 0, len(typed))
+		for _, item := range typed {
+			if block, ok := item.(map[string]any); ok {
+				blockType, _ := block["type"].(string)
+				text, _ := block["text"].(string)
+				if blockType == "text" && util.IsClaudeCodeAttributionSystemText(text) {
+					continue
+				}
+			}
+			kept = append(kept, item)
+		}
+		if len(kept) == len(typed) {
+			return value, true
+		}
+		return kept, len(kept) > 0
+	default:
+		return value, true
+	}
 }
 
 func antigravityClaudeReplayNormalizeSystem(value any) any {
